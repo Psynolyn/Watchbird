@@ -25,7 +25,7 @@ class app:
     
     def setup(self):
         self.place = st.sidebar.text_input(label="", placeholder="Search for a place", on_change=self.find, key="place_box", label_visibility="hidden")
-       
+        
         self.m = folium.Map(
             location=[st.session_state.location.latitude,  st.session_state.location.longitude],  
             zoom_start=st.session_state.zoom,
@@ -67,7 +67,7 @@ class app:
             st.session_state.returnn is not None):
             st.session_state.zoom = st.session_state.returnn["zoom"]
         '''
-        
+
         if st.session_state.message != []:
             st.session_state.toast_iterations += 1
             st.toast(st.session_state.message[1])
