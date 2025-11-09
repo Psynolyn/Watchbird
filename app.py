@@ -122,7 +122,7 @@ class app:
             control=True
         ).add_to(self.m)
 
-        #folium.LayerControl().add_to(self.m)
+        folium.LayerControl().add_to(self.m)
         popup_msg = st.session_state.location.address + "\n\nLatitude: " + str(st.session_state.location.latitude) + ",\nLongitude: " + str(st.session_state.location.longitude)
         folium.Marker([st.session_state.location.latitude, st.session_state.location.longitude], popup=popup_msg ).add_to(self.m)
         
