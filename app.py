@@ -3,6 +3,7 @@ import folium
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 import db_operations
+from PIL import Image
 
 class app:
     def __init__(self):
@@ -44,11 +45,13 @@ class app:
         <span style="color:white">Collecting data…</span><br>
         <span style="color:lime">Available samples for training: {db_operations.get_no_of_rows(self.selected_devices)}</span>
         '''
+        img = Image.open("Umetrain.png")
+        st.sidebar.image(img, caption="Just Train", use_container_width=True)
         
     def add_learnmode_options(self):
         self.model_name = st.sidebar.text_input(label="Add model name", on_change=self.start_data_collection, key="model_name_box")
         st.sidebar.markdown(st.session_state.data_info_placeholder, unsafe_allow_html=True)
-    
+        
     def plot_device(self, device:str):
         db_operations.get_device_data(device)
         db_operations.get_device_settings(device)
