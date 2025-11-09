@@ -14,4 +14,5 @@ def get_no_of_rows(devices:list):
     response = supabase.table("Devices").select("Device_id, Device_name").in_("Device_name", devices).execute().data
     ids = [row["Device_id"] for row in response]
     return supabase.table("Data").select("*", count="exact").in_("Device_id", ids).execute().count
-    
+
+print()   

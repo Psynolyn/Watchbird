@@ -26,21 +26,31 @@ class app:
 
         if "coords" not in st.session_state:
             st.session_state.returnn = []
+        if "data_info_placeholder" not in st.session_state:
+            st.session_state.data_info_placeholder = ""
     
+    def reset_parameters(self):
+        st.session_state.data_info_placeholder = ""
+        self.model_name = ""
+        st.session_state["model_name_box"] = ""
+        self.active_devices = db_operations.get_active_devices() 
+        
     def start_data_collection(self):
-        st.sidebar.write("Collecting data")
-        st.sidebar.write("Available data for training: "+str(db_operations.get_no_of_rows(self.selected_devices)))
+        st.session_state.data_info_placeholder = f'''
+        <span style="color:white">Collecting data…</span><br>
+        <span style="color:lime">Available data for training: {db_operations.get_no_of_rows(self.selected_devices)}</span>
+        '''
         
     def add_learnmode_options(self):
-        self.model_name = st.sidebar.text_input(label="Add model name", on_change=self.start_data_collection)
+        self.model_name = st.sidebar.text_input(label="Add model name", on_change=self.start_data_collection, key="model_name_box")
+        st.sidebar.markdown(st.session_state.data_info_placeholder, unsafe_allow_html=True)
 
     def setup(self):
         self.place = st.sidebar.text_input(label="Find Location", placeholder="Search for a place", on_change=self.find, key="place_box")
-        self.selected_devices = st.sidebar.multiselect("Devices", ["All"]+self.active_devices, placeholder="Select Devices")
-        modes = ["Monitor", "Train"] if(self.selected_devices != "All") else ["Monitor"]
-        mode = st.sidebar.selectbox("Mode", modes)
+        self.selected_devices = st.sidebar.multiselect("Devices", ["All"]+self.active_devices, placeholder="Select Devices", on_change=self.reset_parameters)
+        mode = st.sidebar.selectbox("Mode", ["Monitor", "Train"], on_change=self.reset_parameters)
 
-        if mode == "Learn":
+        if mode == "Train":
             self.add_learnmode_options()
 
         if "All" in self.selected_devices:
