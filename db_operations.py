@@ -5,14 +5,25 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]  
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+device_table = []
+data_table = []
+
+def load_data():
+    global device_table, data_table
+    device_table = supabase.table("Devices").select("*").order("Device_id", desc=False).execute().data
+    data_table = supabase.table("Data").select("*").order("Id", desc=False).execute().data
 
 def get_active_devices():
-    response = supabase.table("Devices").select("*").execute().data
-    return [row["Device_name"] for row in response if row["Status"] == "Active"]
+    return [row["Device_name"] for row in device_table if row["Status"] == "Active"]
+
+def get_device_data(device:str):
+    id = [row["Device_id"] for row in device_table if row["Device_name"] == device][0]
+    return [row for row in data_table if row['Device_id'] == id]
+
+def get_device_settings(device:str):
+    id = [row["Device_id"] for row in device_table if row["Device_name"] == device][0]
+    return device_table[id-1]
 
 def get_no_of_rows(devices:list):
-    response = supabase.table("Devices").select("Device_id, Device_name").in_("Device_name", devices).execute().data
-    ids = [row["Device_id"] for row in response]
-    return supabase.table("Data").select("*", count="exact").in_("Device_id", ids).execute().count
-
-print()   
+    ids = [row["Device_id"] for row in device_table if row["Device_name"] in devices]
+    return len([row["Device_id"] for row in data_table if row["Device_id"] in ids])
