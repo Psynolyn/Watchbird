@@ -15,7 +15,7 @@ class app:
         self.selected_devices = []
         
         if "location" not in st.session_state:
-            st.session_state.location = self.geolocator.geocode("Maisha Hostels")
+            st.session_state.location = self.geolocator.geocode("Nyeri")
         if "zoom" not in st.session_state:
             st.session_state.zoom = 20
         if "message" not in st.session_state:
