@@ -8,15 +8,13 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 device_table = []
 data_table = []
 active_devices = []
+device_positions = {}
 device_name_to_id = {}
 device_id_to_settings = {}
 device_id_to_data = {}
 
-device_table = supabase.table("Devices").select("*").order("Device_id", desc=False).execute().data
-data_table = supabase.table("Data").select("*").order("Id", desc=False).execute().data
-
 def load_data():
-    global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices
+    global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices, device_positions
     device_table = supabase.table("Devices").select("*").order("Device_id", desc=False).execute().data
     data_table = supabase.table("Data").select("*").order("Id", desc=False).execute().data
     device_name_to_id = {row["Device_name"] : row ["Device_id"] for row in device_table}
@@ -26,12 +24,20 @@ def load_data():
     for row in data_table:
         if(row["Device_id"] not in device_id_to_data):
             device_id_to_data[row["Device_id"]] = []
-            device_id_to_data[row["Device_id"]].append(row)
-        else:
-            device_id_to_data[row["Device_id"]].append(row)
 
+        device_id_to_data[row["Device_id"]].append(row)
+
+        if row["Device_id"] not in device_positions:
+            device_positions[row["Device_id"]] = []
+
+        device_positions[row["Device_id"]].append([row["Latitude"], row["Longitude"]])
+        
 def get_active_devices():
     return active_devices
+
+def get_device_positions(device:str):
+    id = device_name_to_id.get(device)
+    return device_positions[id]
 
 def get_device_data(device:str):
     id = device_name_to_id.get(device)
