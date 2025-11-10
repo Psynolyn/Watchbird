@@ -31,14 +31,15 @@ class app:
             st.session_state.active_devices = ""
         if "loaded" not in st.session_state:
             st.session_state.loaded = db_operations.load_data() 
+            print("umm")
 
     
     def reset_parameters(self):
         st.session_state.data_info_placeholder = ""
         self.model_name = ""
         st.session_state["model_name_box"] = ""
-        del st.session_state["loaded"]
-        self.active_devices = db_operations.get_active_devices() 
+        #del st.session_state["loaded"]
+        #self.active_devices = db_operations.get_active_devices() 
  
     def start_data_collection(self):
         st.session_state.data_info_placeholder = f'''
@@ -97,6 +98,9 @@ class app:
             tiles=None,
             zoomControl=False
         )
+
+        st.sidebar.button("Reload DB", on_click=db_operations.load_data)
+        progress_bar = st.progress(st.session_state.zoom)
 
 
         folium.TileLayer(
