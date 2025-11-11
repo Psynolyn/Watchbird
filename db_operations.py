@@ -13,7 +13,7 @@ device_name_to_id = {}
 device_id_to_settings = {}
 device_id_to_data = {}
 
-def load_data():
+def load_data(): 
     global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices, device_positions
     device_table = supabase.table("Devices").select("*").order("Device_id", desc=False).execute().data
     data_table = supabase.table("Data").select("*").order("Id", desc=False).execute().data
@@ -31,7 +31,18 @@ def load_data():
             device_positions[row["Device_id"]] = []
 
         device_positions[row["Device_id"]].append([row["Latitude"], row["Longitude"]])
-        
+
+def reload_db():
+    global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices, device_positions
+    device_table = []
+    data_table = []
+    active_devices = []
+    device_positions = {}
+    device_name_to_id = {}
+    device_id_to_settings = {}
+    device_id_to_data = {}
+    load_data()
+
 def get_active_devices():
     return active_devices
 
