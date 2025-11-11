@@ -39,7 +39,7 @@ class app:
         self.model_name = ""
         st.session_state["model_name_box"] = ""
         #del st.session_state["loaded"]
-        #self.active_devices = db_operations.get_active_devices() 
+        self.active_devices = db_operations.get_active_devices() 
  
     def start_data_collection(self):
         st.session_state.data_info_placeholder = f'''

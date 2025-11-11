@@ -16,11 +16,21 @@ device_id_to_data = {}
 def load_data(): 
     global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices, device_positions
     device_table = supabase.table("Devices").select("*").order("Device_id", desc=False).execute().data
-    data_table = supabase.table("Data").select("*").order("Id", desc=False).execute().data
     device_name_to_id = {row["Device_name"] : row ["Device_id"] for row in device_table}
     device_id_to_settings = {row["Device_id"]: row for row in device_table}
     active_devices = [row["Device_name"] for row in device_table if row["Status"] == "Active"]
 
+    chunk_size = 1000
+    offset = 0
+
+    while True:
+        chunk = supabase.table("Data").select("*").order("Id", desc=False).range(offset, offset + chunk_size - 1).execute().data
+        if len(chunk) <= 0:
+            break
+        else:
+            data_table.extend(chunk)
+            offset = len(data_table)
+            
     for row in data_table:
         if(row["Device_id"] not in device_id_to_data):
             device_id_to_data[row["Device_id"]] = []
