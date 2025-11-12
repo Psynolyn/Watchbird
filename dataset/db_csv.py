@@ -7,6 +7,7 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+table_name = "Data"
 
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371000  # meters
@@ -55,11 +56,7 @@ def compute_features(df: pd.DataFrame):
     
     return df
 
-table_name = "device_positions"  # change to your table name
-df = fetch_data("Data")
-df_features = compute_features(df)
-
-csv_file = "device_positions_features.csv"
-df_features.to_csv("dataset\derived.csv", index=False)
-st.success(f"Data saved to {csv_file}")
-st.dataframe(df_features.head())
+def prepare_dataset():
+    df = fetch_data("Data")
+    df_features = compute_features(df)
+    df_features.to_csv("dataset\derived.csv", index=False)

@@ -3,6 +3,7 @@ import folium
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 import db_operations
+from dataset import db_csv
 
 class app:
     def __init__(self):
@@ -10,7 +11,6 @@ class app:
         st.set_page_config(layout="wide")
         self.m = ""
         self.active_devices = db_operations.get_active_devices() 
-        self.model_name = ""
         self.selected_devices = []
         
         
@@ -18,6 +18,8 @@ class app:
             st.session_state.location = self.geolocator.geocode("Nyeri")
         if "zoom" not in st.session_state:
             st.session_state["zoom"] = 18
+        if "model_name" not in st.session_state:
+            st.session_state["model_name"] = None
         if "result" not in st.session_state:
             st.session_state["result"] = None
         if "message" not in st.session_state:
@@ -39,18 +41,22 @@ class app:
         self.model_name = ""
         st.session_state["model_name_box"] = ""
         #del st.session_state["loaded"]
-        self.active_devices = db_operations.get_active_devices() 
- 
+        #self.active_devices = db_operations.get_active_devices() 
+
     def start_data_collection(self):
         st.session_state.data_info_placeholder = f'''
         <span style="color:white">Collecting data…</span><br>
         <span style="color:lime">Available samples for training: {db_operations.get_no_of_rows(self.selected_devices)}</span>
         '''
-        
+    def start_training(self):
+        db_csv.prepare_dataset()
+
     def add_learnmode_options(self):
-        self.model_name = st.sidebar.text_input(label="Add model name", on_change=self.start_data_collection, key="model_name_box")
+        st.session_state["model_name"] = st.sidebar.text_input(label="Add model name", on_change=self.start_data_collection, key="model_name_box").strip()
         st.sidebar.markdown(st.session_state.data_info_placeholder, unsafe_allow_html=True)
-        
+        if st.session_state["model_name"] or st.session_state["model_name"] != "":
+            st.sidebar.button("Train", on_click=self.start_training)
+
     def plot_device(self, device:str):
         db_operations.get_device_data(device)
         db_operations.get_device_settings(device)
