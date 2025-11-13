@@ -40,7 +40,7 @@ def load_data():
         if row["Device_id"] not in device_positions:
             device_positions[row["Device_id"]] = []
 
-        device_positions[row["Device_id"]].append([row["Latitude"], row["Longitude"]])
+        device_positions[row["Device_id"]].append([row["Latitude"], row["Longitude"], row["Anomaly"]])
 
 def reload_db():
     global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices, device_positions
@@ -73,3 +73,7 @@ def get_no_of_rows(devices:list):
     for device in devices:
         length += len(get_device_data(device))
     return length
+
+def insert_results(outlier_result: dict):
+    supabase.table("Data").upsert(outlier_result, on_conflict="Id").execute()
+

@@ -58,7 +58,7 @@ class app:
             st.sidebar.button("Train", on_click=self.start_training)
 
     def plot_device(self, device:str):
-        db_operations.get_device_data(device)
+        data = db_operations.get_device_data(device)
         db_operations.get_device_settings(device)
         locations = db_operations.get_device_positions(device)
 
@@ -72,12 +72,21 @@ class app:
                 ).add_to(self.m)
 
             for point in locations:
+                if point[2] == -1:
+                    color_1 = "red"
+                    color_2 = "red"
+                    radius = 160
+                else:
+                    color_1 = db_operations.get_device_settings(device)["Color_1"]
+                    color_2 = db_operations.get_device_settings(device)["Color_2"]
+                    radius=5
+
                 folium.Circle(
                     location=[point[0], point[1]],  
-                    radius=5,                    
-                    color=db_operations.get_device_settings(device)["Color_1"],                  
+                    radius=radius,                    
+                    color=color_1,                  
                     fill=True,                   
-                    fill_color=db_operations.get_device_settings(device)["Color_2"],             
+                    fill_color=color_2,             
                     fill_opacity=0.4,            
                     popup="Latitude: "+str(point[0])+" longitude: "+str(point[1]),
                 

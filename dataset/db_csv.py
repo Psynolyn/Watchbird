@@ -30,6 +30,7 @@ def fetch_data(table_name: str):
     data = response.data
     df = pd.DataFrame(data)
     df["Timestamp"] = pd.to_datetime(df["Timestamp"])
+    
     return df
 
 def compute_features(df: pd.DataFrame):
