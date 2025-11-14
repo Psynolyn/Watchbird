@@ -4,8 +4,6 @@ from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 import db_operations
 import train
-from train import Logger
-from train import Config
 from dataset import db_csv
 import os
 
@@ -38,14 +36,22 @@ class app:
             st.session_state.timer = ""
         if "active_devices" not in st.session_state:
             st.session_state.active_devices = ""
+        
        
     
     def reset_parameters(self):
         st.session_state.data_info_placeholder = ""
         self.model_name = ""
         st.session_state["model_name_box"] = ""
-
-        #del st.session_state["loaded"]
+        if len(st.session_state["multiselect"]) > 1 and "All" in self.selected_devices:
+            self.selected_devices.remove("All")
+            prev = st.session_state["multiselect"]
+            st.session_state["multiselect"] = []
+            new = []
+            for i in prev:
+                if i != "All":
+                    new.append(i)
+            st.session_state["multiselect"] = new
         #self.active_devices = db_operations.get_active_devices() 
 
     def start_data_collection(self):
@@ -56,34 +62,66 @@ class app:
 
 
     def start_training(self):
-        db_operations.reload_db()
-        db_csv.prepare_dataset()
-        train.run_pipeline(
-            device_ids=[db_operations.device_name_to_id.get(device) for device in self.selected_devices],
-            perform_hp_search=False,
-            create_visualizations=True,
-            model_name=st.session_state["model_name"]
-        )
-        trained_devices = [{"Device_name":device, "IF_model":st.session_state["model_name"]} for device in self.selected_devices if device != "All"]
-        for model in trained_devices:
-            db_operations.save_device_if_model(model)
-        
-        db_operations.reload_db()
-        allowed_files = []
-        for model in db_operations.available_models:
-            allowed_files.append(model+".pkl")
-            allowed_files.append(model+"_Scaler.pkl")
+        if len(self.selected_devices) != 0:
+            db_operations.reload_db()
+            db_csv.prepare_dataset()
+            train.run_pipeline(
+                device_ids=[db_operations.device_name_to_id.get(device) for device in self.selected_devices],
+                perform_hp_search=False,
+                create_visualizations=True,
+                model_name=st.session_state["model_name"]
+            )
+            trained_devices = [{"Device_name":device, "IF_model":st.session_state["model_name"]} for device in self.selected_devices if device != "All"]
+            for model in trained_devices:
+                db_operations.save_device_if_model(model)
+            
+            db_operations.reload_db()
+            allowed_files = []
+            for model in db_operations.available_models:
+                allowed_files.append(model+".pkl")
+                allowed_files.append(model+"_Scaler.pkl")
 
-        for filename in os.listdir("models"):
-            if filename not in allowed_files:    
-                full_path = os.path.join("models", filename)
-                os.remove(full_path)
+            for filename in os.listdir("models"):
+                if filename not in allowed_files:    
+                    full_path = os.path.join("models", filename)
+                    os.remove(full_path)
             
     def add_learnmode_options(self):
         st.session_state["model_name"] = st.sidebar.text_input(label="Add new model name", on_change=self.start_data_collection, key="model_name_box").strip()
         st.sidebar.markdown(st.session_state.data_info_placeholder, unsafe_allow_html=True)
         if st.session_state["model_name"] or st.session_state["model_name"] != "":
             st.sidebar.button("Train", on_click=self.start_training)
+    
+    def add_model_assiggnment_options(self):
+        st.sidebar.text("Assign models to your devices")
+        
+        if "All" not in self.selected_devices:
+            for device in self.selected_devices:
+                    key = f"model_{device}"
+                    if key not in st.session_state:
+                        st.session_state[key] = db_operations.get_device_model(device)
+        
+                    try:
+                        index = db_operations.available_models.index(db_operations.get_device_model(device))
+                    except:
+                        index = None
+
+                    selected = st.sidebar.selectbox(device, 
+                                        db_operations.available_models, 
+                                        placeholder="Choose a model",
+                                        index = index,
+                                        key=f"model_{device}")
+                    current_model = db_operations.get_device_model(device)
+                    if selected and selected != current_model:
+                        db_operations.save_device_if_model({
+                            "Device_name": device,
+                            "IF_model": selected
+                        })
+                                                
+        else:
+            selected = st.sidebar.selectbox("All", db_operations.available_models, index=None, placeholder="Choose a model")
+            
+  
 
     def plot_device(self, device:str):
         db_operations.get_device_data(device)
@@ -131,10 +169,9 @@ class app:
                 location=[st.session_state.location.latitude,  st.session_state.location.longitude],  
                 zoom_start=st.session_state["zoom"],
                 tiles=None,
-                zoomControl=False
             )
         self.place = st.sidebar.text_input(label="Find Location", placeholder="Search for a place", on_change=self.find, key="place_box")
-        self.selected_devices = st.sidebar.multiselect("Devices", ["All"]+db_operations.get_active_devices(), placeholder="Select Devices", on_change=self.reset_parameters)
+        self.selected_devices = st.sidebar.multiselect("Devices", ["All"]+db_operations.get_active_devices(), placeholder="Select Devices", on_change=self.reset_parameters, key="multiselect")
         st.sidebar.checkbox(label="Show path btwn points", key="show_polyline")
         if self.dev_mode:
             modes = ["Monitor", "Train", "Device Model Assignment"]
@@ -145,6 +182,9 @@ class app:
 
         if mode == "Train":
             self.add_learnmode_options()
+        
+        if mode == "Device Model Assignment":
+            self.add_model_assiggnment_options()
 
         if "All" in self.selected_devices:
             self.selected_devices.extend(db_operations.get_active_devices())
@@ -210,12 +250,13 @@ class app:
             if device != "All":
                 self.plot_device(device)            
     
-        result = st_folium(self.m, height=800, width=None, returned_objects=[])
+        st_folium(self.m, height=800, width=None, returned_objects=[])
+        '''       
         if result.get("last_clicked"):
             lat, lng = result["lat"], result["lng"]
             st.write("Last Click: ", lat, lng)
 
-        '''
+        
         if ((st.session_state["result"] and "zoom" in  st.session_state["result"])and
             st.session_state["result"] is not None):
             st.write(st.session_state["result"]["zoom"])

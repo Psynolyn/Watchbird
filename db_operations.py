@@ -12,16 +12,18 @@ polyline_points = {}
 device_positions = {}
 device_name_to_id = {}
 device_id_to_settings = {}
+device_id_to_model = {}
 device_id_to_data = {}
 available_models = []
 
 def load_data(): 
-    global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices, device_positions, polyline_points, available_models
+    global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices, device_positions, polyline_points, available_models, device_id_to_model
     device_table = supabase.table("Devices").select("*").order("Device_id", desc=False).execute().data
     device_name_to_id = {row["Device_name"] : row ["Device_id"] for row in device_table}
     device_id_to_settings = {row["Device_id"]: row for row in device_table}
     active_devices = [row["Device_name"] for row in device_table if row["Status"] == "Active"]
-   
+    device_id_to_model = {row["Device_id"]: row["IF_model"] for row in device_table}
+
     chunk_size = 1000
     offset = 0
 
@@ -49,11 +51,11 @@ def load_data():
         polyline_points[row["Device_id"]].append([row["Latitude"], row["Longitude"]])
 
     for row2 in device_table:
-        if row2["IF_model"] not in available_models:
+        if row2["IF_model"] not in available_models and row2["IF_model"] != "" and row2["IF_model"] != None:
             available_models.append(row2["IF_model"])
 
 def reload_db():
-    global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices, device_positions, polyline_points, available_models
+    global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices, device_positions, polyline_points, available_models, device_id_to_model
     device_table = []
     data_table = []
     active_devices = []
@@ -61,6 +63,7 @@ def reload_db():
     device_positions = {}
     device_name_to_id = {}
     device_id_to_settings = {}
+    device_id_to_model = {}
     device_id_to_data = {}
     available_models = []
     load_data()
@@ -96,5 +99,6 @@ def save_outlier_result(outlier_result: dict):
 def save_device_if_model(if_model: dict):
     supabase.table("Devices").upsert(if_model, on_conflict="Device_name").execute()
 
-def get_models_available():
-    return available_models
+def get_device_model(device:str):
+    id = device_name_to_id.get(device)
+    return device_id_to_model.get(id)
