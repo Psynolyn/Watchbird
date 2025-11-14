@@ -167,7 +167,8 @@ class Config:
 # DATA LOADING AND PREPROCESSING
 # ============================================================================
 
-def load_data(device_id: Optional[int] = None, 
+def load_data(device_id: Optional[int] = None,
+              device_ids: Optional[List[int]] = None,
               path: str = Config.DATA_PATH,
               validate: bool = True) -> pd.DataFrame:
     """
@@ -177,6 +178,8 @@ def load_data(device_id: Optional[int] = None,
     -----------
     device_id : int, optional
         Specific device to load. If None, loads all devices.
+    device_ids : list of int, optional
+        List of device IDs to load. Takes precedence over device_id.
     path : str
         Path to the CSV file
     validate : bool
@@ -195,15 +198,21 @@ def load_data(device_id: Optional[int] = None,
     # Parse timestamp as timezone-aware
     df['Timestamp'] = pd.to_datetime(df['Timestamp'], utc=True)
     
-    # Filter by device if specified
-    if device_id is not None:
+    # Filter by device(s) if specified
+    if device_ids is not None:
+        df = df[df['Device_id'].isin(device_ids)].copy()
+        Logger.add(f"Filtered to Device_ids={device_ids}: {len(df)} records")
+        Logger.add(f"  Records per device: {df.groupby('Device_id').size().to_dict()}")
+    elif device_id is not None:
         df = df[df['Device_id'] == device_id].copy()
         Logger.add(f"Filtered to Device_id={device_id}: {len(df)} records")
     else:
         Logger.add(f"Loaded all devices: {len(df)} records")
+        Logger.add(f"  Unique devices: {df['Device_id'].nunique()}")
     
     if len(df) == 0:
-        raise ValueError(f"No data found for device_id={device_id}")
+        filter_desc = f"device_ids={device_ids}" if device_ids else f"device_id={device_id}"
+        raise ValueError(f"No data found for {filter_desc}")
     
     # Sort by timestamp (critical for time-series features)
     df = df.sort_values(['Device_id', 'Timestamp']).reset_index(drop=True)
@@ -1370,10 +1379,13 @@ def incremental_retrain(old_data: pd.DataFrame,
 # ============================================================================
 
 def run_pipeline(device_id: Optional[int] = None,
+                device_ids: Optional[List[int]] = None,
                 data_path: str = Config.DATA_PATH,
                 perform_hp_search: bool = False,
                 save_results: bool = True,
-                create_visualizations: bool = True) -> Dict:
+                create_visualizations: bool = True,
+                model_name: Optional[str] = "IF_Model") -> Dict:
+
     """
     Run complete anomaly detection pipeline.
     
@@ -1381,6 +1393,8 @@ def run_pipeline(device_id: Optional[int] = None,
     -----------
     device_id : int, optional
         Device to analyze (None for all)
+    device_ids : list of int, optional
+        List of device IDs to analyze. Takes precedence over device_id.
     data_path : str
         Path to data CSV
     perform_hp_search : bool
@@ -1403,7 +1417,7 @@ def run_pipeline(device_id: Optional[int] = None,
     Logger.add("="*80)
     
     # Step 1: Load data
-    df = load_data(device_id=device_id, path=data_path)
+    df = load_data(device_id=device_id, device_ids=device_ids, path=data_path)
     
     if len(df) < Config.MIN_SAMPLES_FOR_TRAINING:
         raise ValueError(f"Insufficient data: {len(df)} samples "
@@ -1493,7 +1507,7 @@ def run_pipeline(device_id: Optional[int] = None,
     
     # Step 10: Save model and results
     if save_results:
-        save_model(model, scaler, feature_columns)
+        save_model(model, scaler, feature_columns, model_path='models/'+model_name+'.pkl', scaler_path='models/'+model_name+'_Scaler.pkl')
         
         # Save results CSV
         output_df = df[['Timestamp', 'Device_id', 'Latitude', 'Longitude', 
@@ -1507,7 +1521,7 @@ def run_pipeline(device_id: Optional[int] = None,
         df_to_upsert["Id"] = df_to_upsert["Id"].astype(int)
         df_to_upsert["Anomaly"] = df_to_upsert["Anomaly"].astype(int)
        
-        Logger.add(db_operations.insert_results(df_to_upsert.to_dict(orient="records")))
+        Logger.add(db_operations.save_outlier_result(df_to_upsert.to_dict(orient="records")))
 
     
     # Step 11: Visualizations
@@ -1545,7 +1559,8 @@ def run_pipeline(device_id: Optional[int] = None,
 def run_inference(new_data_path: str,
                  model_path: str = Config.MODEL_SAVE_PATH,
                  scaler_path: str = Config.SCALER_SAVE_PATH,
-                 device_id: Optional[int] = None) -> pd.DataFrame:
+                 device_id: Optional[int] = None,
+                 device_ids: Optional[List[int]] = None) -> pd.DataFrame:
     """
     Run inference on new data using saved model.
     
@@ -1559,6 +1574,8 @@ def run_inference(new_data_path: str,
         Path to saved scaler
     device_id : int, optional
         Device to analyze
+    device_ids : list of int, optional
+        List of device IDs to analyze. Takes precedence over device_id.
         
     Returns:
     --------
@@ -1573,7 +1590,7 @@ def run_inference(new_data_path: str,
     model, scaler, feature_columns = load_model(model_path, scaler_path)
     
     # Load new data
-    df = load_data(device_id=device_id, path=new_data_path)
+    df = load_data(device_id=device_id, device_ids=device_ids, path=new_data_path)
     
     # Engineer features
     df, _ = build_features(df)
@@ -1610,41 +1627,85 @@ def run_inference(new_data_path: str,
 # ============================================================================
 # EXAMPLE USAGE
 # ============================================================================
-
+'''
 if __name__ == "__main__":
     """
     Example usage of the anomaly detection pipeline.
     
     This module can be imported and used in other scripts:
     
-    EXAMPLE 1: Train and save model with custom filtering
-    ------------------------------------------------------
+    EXAMPLE 1: Train on multiple devices
+    -------------------------------------
     from train import run_pipeline, Logger, Config
+    
+    # Train on devices 1, 2, and 3
+    results = run_pipeline(
+        device_ids=[1, 2, 3],
+        perform_hp_search=False,
+        create_visualizations=True
+    )
+    
+    # Access logs
+    logs = Logger.get_logs()
+    for log in logs:
+        print(log)
+    
+    EXAMPLE 2: Train on all devices
+    --------------------------------
+    from train import run_pipeline
+    
+    # Train on all devices (don't specify device_id or device_ids)
+    results = run_pipeline(
+        create_visualizations=True
+    )
+    
+    EXAMPLE 3: Train with custom filtering on multiple devices
+    -----------------------------------------------------------
+    from train import run_pipeline, Config
     
     # Adjust filtering to keep only events with 3+ anomaly points
     Config.MIN_EVENT_SIZE = 3
     Config.EVENT_GAP_THRESHOLD = 600  # 10 minutes
     
     results = run_pipeline(
-        device_id=2,
+        device_ids=[1, 2, 5, 10],
         perform_hp_search=False,
         create_visualizations=True
     )
     
-    # Access logs from another module
-    logs = Logger.get_logs()
-    for log in logs:
-        print(log)
+    EXAMPLE 4: Run inference on multiple devices
+    ---------------------------------------------
+    from train import run_inference, Logger
     
-    EXAMPLE 2: Manual filtering of isolated anomalies
+    df, events, metrics = run_inference(
+        new_data_path='new_data.csv',
+        device_ids=[1, 2, 3]
+    )
+    
+    # Events now only contain clustered anomalies
+    print(f"Detected {len(events)} significant anomaly events")
+    
+    logs = Logger.get_logs_string()
+    print(logs)
+    
+    EXAMPLE 5: Load and score specific devices
+    -------------------------------------------
+    from train import load_model, load_data, build_features, score_and_label
+    
+    model, scaler, feature_columns = load_model()
+    df = load_data(device_ids=[1, 3, 5], path='new_data.csv')
+    df, _ = build_features(df)
+    scores, labels = score_and_label(model, scaler, df[feature_columns].values)
+    
+    EXAMPLE 6: Manual filtering with multiple devices
     --------------------------------------------------
     from train import (
         load_data, build_features, load_model, 
         score_and_label, filter_isolated_anomalies
     )
     
-    # Load and score data
-    df = load_data(device_id=2)
+    # Load and score data from multiple devices
+    df = load_data(device_ids=[1, 2, 3])
     df, feature_columns = build_features(df)
     model, scaler, _ = load_model()
     scores, labels = score_and_label(model, scaler, df[feature_columns].values)
@@ -1658,62 +1719,8 @@ if __name__ == "__main__":
         min_event_size=2       # Keep events with 2+ points
     )
     
-    # Only keep events with 5+ points (very strict)
-    df_strict = filter_isolated_anomalies(df, min_event_size=5)
-    
-    EXAMPLE 3: Run inference on new data
-    -------------------------------------
-    from train import run_inference, Logger
-    
-    df, events, metrics = run_inference(
-        new_data_path='new_data.csv',
-        device_id=2
-    )
-    
-    # Events now only contain clustered anomalies
-    print(f"Detected {len(events)} significant anomaly events")
-    
-    logs = Logger.get_logs_string()
-    print(logs)
-    
-    EXAMPLE 4: Load and use saved model
-    ------------------------------------
-    from train import load_model, load_data, build_features, score_and_label
-    
-    model, scaler, feature_columns = load_model()
-    df = load_data(device_id=2, path='new_data.csv')
-    df, _ = build_features(df)
-    scores, labels = score_and_label(model, scaler, df[feature_columns].values)
-    
-    EXAMPLE 5: Custom pipeline with log monitoring
-    -----------------------------------------------
-    from train import (
-        load_data, build_features, split_train_test,
-        train_isolation_forest, save_model, Logger
-    )
-    
-    # Reset logs before starting
-    Logger.reset()
-    
-    # Load and prepare data
-    df = load_data(device_id=2)
-    df, feature_columns = build_features(df)
-    train_df, test_df = split_train_test(df)
-    
-    # Train custom model
-    from sklearn.preprocessing import RobustScaler
-    scaler = RobustScaler()
-    X_train = scaler.fit_transform(train_df[feature_columns].values)
-    model = train_isolation_forest(X_train, contamination=0.03)
-    
-    # Save and get logs
-    save_model(model, scaler, feature_columns)
-    
-    # Print all logs
-    Logger.print_logs()
-    
-    # Or access logs programmatically
-    logs = Logger.get_logs()
+    # Check results per device
+    print(df_filtered.groupby('Device_id')['Anomaly'].value_counts())
     
     
     FILTERING PARAMETERS GUIDE:
@@ -1733,15 +1740,22 @@ if __name__ == "__main__":
     - 600s (10 min): Moderate grouping (good for most cases)
     - 900s (15 min): Default - allows some normal behavior between anomalies
     - 1800s (30 min): Loose grouping, treats broader patterns as single events
+    
+    DEVICE SELECTION:
+    -----------------
+    - device_id=1: Train on single device
+    - device_ids=[1, 2, 3]: Train on multiple specific devices
+    - No parameter: Train on all devices in dataset
     """
     
-    # Demo: Run pipeline on Device 1
+    # Demo: Run pipeline on multiple devices
     Logger.add("\n" + "="*80)
-    Logger.add("DEMO MODE: Training on Device 1")
+    Logger.add("DEMO MODE: Training on Multiple Devices")
     Logger.add("="*80 + "\n")
     
+    # Example: Train on devices 1 and 2
     results = run_pipeline(
-        device_id=1,
+        device_ids=[1, 2],
         perform_hp_search=False,
         create_visualizations=True
     )
@@ -1752,5 +1766,4 @@ if __name__ == "__main__":
     Logger.add(f"\nAnomalies detected (after filtering): {results['test_metrics_filtered']['n_anomalies']}")
     Logger.add(f"Anomaly rate: {results['test_metrics_filtered']['anomaly_rate']*100:.2f}%")
     Logger.add(f"Events identified: {len(results['events'])}")
-    
-    # Print all logs
+'''

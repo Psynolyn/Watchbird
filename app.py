@@ -3,17 +3,23 @@ import folium
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
 import db_operations
+import train
+from train import Logger
+from train import Config
 from dataset import db_csv
+import os
 
 class app:
     def __init__(self):
         self.geolocator = Nominatim(user_agent="streamlit_map")
         st.set_page_config(layout="wide")
         self.m = ""
-        self.active_devices = db_operations.get_active_devices() 
         self.selected_devices = []
+        self.messages = ["Logger.get_logs()"]
+        self.dev_mode = 1
         
-        
+        if "loaded" not in st.session_state:
+            st.session_state.loaded = db_operations.load_data() 
         if "location" not in st.session_state:
             st.session_state.location = self.geolocator.geocode("Nyeri")
         if "zoom" not in st.session_state:
@@ -32,14 +38,13 @@ class app:
             st.session_state.timer = ""
         if "active_devices" not in st.session_state:
             st.session_state.active_devices = ""
-        if "loaded" not in st.session_state:
-            st.session_state.loaded = db_operations.load_data() 
-
+       
     
     def reset_parameters(self):
         st.session_state.data_info_placeholder = ""
         self.model_name = ""
         st.session_state["model_name_box"] = ""
+
         #del st.session_state["loaded"]
         #self.active_devices = db_operations.get_active_devices() 
 
@@ -48,24 +53,47 @@ class app:
         <span style="color:white">Collecting data…</span><br>
         <span style="color:lime">Available samples for training: {db_operations.get_no_of_rows(self.selected_devices)}</span>
         '''
-    def start_training(self):
-        db_csv.prepare_dataset()
 
+
+    def start_training(self):
+        db_operations.reload_db()
+        db_csv.prepare_dataset()
+        train.run_pipeline(
+            device_ids=[db_operations.device_name_to_id.get(device) for device in self.selected_devices],
+            perform_hp_search=False,
+            create_visualizations=True,
+            model_name=st.session_state["model_name"]
+        )
+        trained_devices = [{"Device_name":device, "IF_model":st.session_state["model_name"]} for device in self.selected_devices if device != "All"]
+        for model in trained_devices:
+            db_operations.save_device_if_model(model)
+        
+        db_operations.reload_db()
+        allowed_files = []
+        for model in db_operations.available_models:
+            allowed_files.append(model+".pkl")
+            allowed_files.append(model+"_Scaler.pkl")
+
+        for filename in os.listdir("models"):
+            if filename not in allowed_files:    
+                full_path = os.path.join("models", filename)
+                os.remove(full_path)
+            
     def add_learnmode_options(self):
-        st.session_state["model_name"] = st.sidebar.text_input(label="Add model name", on_change=self.start_data_collection, key="model_name_box").strip()
+        st.session_state["model_name"] = st.sidebar.text_input(label="Add new model name", on_change=self.start_data_collection, key="model_name_box").strip()
         st.sidebar.markdown(st.session_state.data_info_placeholder, unsafe_allow_html=True)
         if st.session_state["model_name"] or st.session_state["model_name"] != "":
             st.sidebar.button("Train", on_click=self.start_training)
 
     def plot_device(self, device:str):
-        data = db_operations.get_device_data(device)
+        db_operations.get_device_data(device)
         db_operations.get_device_settings(device)
         locations = db_operations.get_device_positions(device)
 
         try:
             if st.session_state["show_polyline"]:
                 folium.PolyLine(
-                    locations = locations,
+                    locations = db_operations.get_device_polyline_points(device),
                     color = db_operations.get_device_settings(device)["Color_1"],
                     weight = 2.5,
                     opacity = 0.6
@@ -106,15 +134,20 @@ class app:
                 zoomControl=False
             )
         self.place = st.sidebar.text_input(label="Find Location", placeholder="Search for a place", on_change=self.find, key="place_box")
-        self.selected_devices = st.sidebar.multiselect("Devices", ["All"]+self.active_devices, placeholder="Select Devices", on_change=self.reset_parameters)
+        self.selected_devices = st.sidebar.multiselect("Devices", ["All"]+db_operations.get_active_devices(), placeholder="Select Devices", on_change=self.reset_parameters)
         st.sidebar.checkbox(label="Show path btwn points", key="show_polyline")
-        mode = st.sidebar.selectbox("Mode", ["Monitor", "Train"], on_change=self.reset_parameters)
+        if self.dev_mode:
+            modes = ["Monitor", "Train", "Device Model Assignment"]
+        else:
+            modes = ["Monitor", "Device Model Assignment"]
+
+        mode = st.sidebar.selectbox("Mode", modes, on_change=self.reset_parameters)
 
         if mode == "Train":
             self.add_learnmode_options()
 
         if "All" in self.selected_devices:
-            self.selected_devices.extend(self.active_devices)
+            self.selected_devices.extend(db_operations.get_active_devices())
             self.selected_devices = list(dict.fromkeys(self.selected_devices))
 
         st.sidebar.button("Reload DB", on_click=db_operations.reload_db)

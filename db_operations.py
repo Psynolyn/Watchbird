@@ -8,18 +8,20 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 device_table = []
 data_table = []
 active_devices = []
+polyline_points = {}
 device_positions = {}
 device_name_to_id = {}
 device_id_to_settings = {}
 device_id_to_data = {}
+available_models = []
 
 def load_data(): 
-    global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices, device_positions
+    global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices, device_positions, polyline_points, available_models
     device_table = supabase.table("Devices").select("*").order("Device_id", desc=False).execute().data
     device_name_to_id = {row["Device_name"] : row ["Device_id"] for row in device_table}
     device_id_to_settings = {row["Device_id"]: row for row in device_table}
     active_devices = [row["Device_name"] for row in device_table if row["Status"] == "Active"]
-
+   
     chunk_size = 1000
     offset = 0
 
@@ -40,17 +42,27 @@ def load_data():
         if row["Device_id"] not in device_positions:
             device_positions[row["Device_id"]] = []
 
+        if row["Device_id"] not in polyline_points:
+            polyline_points[row["Device_id"]] = []
+
         device_positions[row["Device_id"]].append([row["Latitude"], row["Longitude"], row["Anomaly"]])
+        polyline_points[row["Device_id"]].append([row["Latitude"], row["Longitude"]])
+
+    for row2 in device_table:
+        if row2["IF_model"] not in available_models:
+            available_models.append(row2["IF_model"])
 
 def reload_db():
-    global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices, device_positions
+    global device_table, data_table, device_name_to_id, device_id_to_settings, device_id_to_data, active_devices, device_positions, polyline_points, available_models
     device_table = []
     data_table = []
     active_devices = []
+    polyline_points = {}
     device_positions = {}
     device_name_to_id = {}
     device_id_to_settings = {}
     device_id_to_data = {}
+    available_models = []
     load_data()
 
 def get_active_devices():
@@ -59,6 +71,10 @@ def get_active_devices():
 def get_device_positions(device:str):
     id = device_name_to_id.get(device)
     return device_positions[id]
+
+def get_device_polyline_points(device:str):
+    id = device_name_to_id.get(device)
+    return polyline_points[id]
 
 def get_device_data(device:str):
     id = device_name_to_id.get(device)
@@ -74,6 +90,11 @@ def get_no_of_rows(devices:list):
         length += len(get_device_data(device))
     return length
 
-def insert_results(outlier_result: dict):
+def save_outlier_result(outlier_result: dict):
     supabase.table("Data").upsert(outlier_result, on_conflict="Id").execute()
 
+def save_device_if_model(if_model: dict):
+    supabase.table("Devices").upsert(if_model, on_conflict="Device_name").execute()
+
+def get_models_available():
+    return available_models
