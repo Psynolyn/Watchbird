@@ -1,6 +1,7 @@
 from supabase import create_client
 import streamlit as st
-
+import pandas as pd
+    
 SUPABASE_URL = st.secrets["SUPABASE_URL"]  
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]  
 
@@ -102,3 +103,162 @@ def save_device_if_model(if_model: dict):
 def get_device_model(device:str):
     id = device_name_to_id.get(device)
     return device_id_to_model.get(id)
+
+def get_device_data_for_inference(device_name: str):
+    """
+    Get all data for a device from Supabase for inference.
+    Returns DataFrame with all necessary columns for anomaly detection.
+    
+    Args:
+        device_name: Name of the device
+    
+    Returns:
+        pd.DataFrame with columns: Id, Timestamp, Device_id, Latitude, 
+        Longitude, Altitude, speed_m_s, delta_alt, dt, distance_m, bearing, acceleration
+    """
+    
+    device_id = device_name_to_id.get(device_name)
+    
+    if device_id is None:
+        return None
+    
+    try:
+        # Get data from Supabase in chunks (to handle large datasets)
+        all_data = []
+        chunk_size = 1000
+        offset = 0
+        
+        while True:
+            # Query Supabase for this device
+            chunk = (supabase.table("Data")
+                    .select("Id, Timestamp, Device_id, Latitude, Longitude, Altitude, "
+                           "speed_m_s, delta_alt, dt, distance_m, bearing, acceleration")
+                    .eq("Device_id", device_id)
+                    .order("Timestamp", desc=False)
+                    .range(offset, offset + chunk_size - 1)
+                    .execute()
+                    .data)
+            
+            if len(chunk) == 0:
+                break
+            
+            all_data.extend(chunk)
+            
+            # If we got less than chunk_size, we've reached the end
+            if len(chunk) < chunk_size:
+                break
+                
+            offset += chunk_size
+        
+        if len(all_data) == 0:
+            return None
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(all_data)
+        
+        # Ensure proper data types
+        df['Timestamp'] = pd.to_datetime(df['Timestamp'])
+        df['Device_id'] = df['Device_id'].astype(int)
+        
+        return df
+        
+    except Exception as e:
+        print(f"Error fetching device data from Supabase: {e}")
+        return None
+
+
+def get_unprocessed_device_data(device_name: str, last_id: int = 0):
+    """
+    Get only unprocessed data points for a device (Id > last_id).
+    
+    Args:
+        device_name: Name of the device
+        last_id: Last processed record ID
+    
+    Returns:
+        pd.DataFrame with new records
+    """
+    
+    device_id = device_name_to_id.get(device_name)
+    
+    if device_id is None:
+        return None
+    
+    try:
+        # Get only new records (Id > last_id)
+        all_data = []
+        chunk_size = 1000
+        offset = 0
+        
+        while True:
+            chunk = (supabase.table("Data")
+                    .select("Id, Timestamp, Device_id, Latitude, Longitude, Altitude, "
+                           "speed_m_s, delta_alt, dt, distance_m, bearing, acceleration")
+                    .eq("Device_id", device_id)
+                    .gt("Id", last_id)  # Only get records with Id > last_id
+                    .order("Timestamp", desc=False)
+                    .range(offset, offset + chunk_size - 1)
+                    .execute()
+                    .data)
+            
+            if len(chunk) == 0:
+                break
+            
+            all_data.extend(chunk)
+            
+            if len(chunk) < chunk_size:
+                break
+                
+            offset += chunk_size
+        
+        if len(all_data) == 0:
+            return None
+        
+        # Convert to DataFrame
+        df = pd.DataFrame(all_data)
+        
+        # Ensure proper data types
+        df['Timestamp'] = pd.to_datetime(df['Timestamp'])
+        df['Device_id'] = df['Device_id'].astype(int)
+        
+        return df
+        
+    except Exception as e:
+        print(f"Error fetching unprocessed data from Supabase: {e}")
+        return None
+
+
+# Simpler alternative that uses your existing in-memory data
+def get_device_data_for_inference_cached(device_name: str):
+    """
+    Get device data from already loaded cache (faster but not real-time).
+    Uses the device_id_to_data dictionary that's already loaded.
+    
+    Args:
+        device_name: Name of the device
+    
+    Returns:
+        pd.DataFrame with device data
+    """
+    
+    device_id = device_name_to_id.get(device_name)
+    
+    if device_id is None:
+        return None
+    
+    # Get data from the already loaded cache
+    device_data = device_id_to_data.get(device_id, [])
+    
+    if len(device_data) == 0:
+        return None
+    
+    # Convert to DataFrame
+    df = pd.DataFrame(device_data)
+    
+    # Ensure proper data types
+    if 'Timestamp' in df.columns:
+        df['Timestamp'] = pd.to_datetime(df['Timestamp'])
+    if 'Device_id' in df.columns:
+        df['Device_id'] = df['Device_id'].astype(int)
+    
+    return df

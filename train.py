@@ -337,7 +337,7 @@ def compute_or_validate_speed(df: pd.DataFrame) -> pd.DataFrame:
 def build_features(df: pd.DataFrame, 
                    rolling_windows: List[int] = None) -> Tuple[pd.DataFrame, List[str]]:
     """
-    Engineer features for anomaly detection, avoiding raw bearing.
+    Engineer features for anomaly detection, computing missing columns if needed.
     
     Parameters:
     -----------
@@ -361,6 +361,79 @@ def build_features(df: pd.DataFrame,
     df = df.copy()
     feature_columns = []
     
+    # === COMPUTE MISSING BASE COLUMNS ===
+    # This ensures the function works regardless of data source
+    
+    # Ensure Timestamp is datetime and timezone-aware
+    if 'Timestamp' in df.columns:
+        if not pd.api.types.is_datetime64_any_dtype(df['Timestamp']):
+            df['Timestamp'] = pd.to_datetime(df['Timestamp'], utc=True)
+        elif df['Timestamp'].dt.tz is None:
+            df['Timestamp'] = df['Timestamp'].dt.tz_localize('UTC')
+    
+    # Sort by device and timestamp (critical for time-series features)
+    df = df.sort_values(['Device_id', 'Timestamp']).reset_index(drop=True)
+    
+    # Compute dt (time delta) if missing or contains NaN
+    if 'dt' not in df.columns or df['dt'].isna().any():
+        Logger.add("  Computing dt (time deltas)...")
+        df['dt'] = df.groupby('Device_id')['Timestamp'].diff().dt.total_seconds()
+        df['dt'] = df['dt'].fillna(0)
+    
+    # Compute distance_m if missing or contains NaN
+    if 'distance_m' not in df.columns or df['distance_m'].isna().any():
+        Logger.add("  Computing distance_m (haversine distance)...")
+        df['delta_lat'] = df.groupby('Device_id')['Latitude'].diff()
+        df['delta_lon'] = df.groupby('Device_id')['Longitude'].diff()
+        
+        # Shift coordinates to get previous point
+        prev_lat = df.groupby('Device_id')['Latitude'].shift(1)
+        prev_lon = df.groupby('Device_id')['Longitude'].shift(1)
+        
+        df['distance_m'] = haversine_distance(
+            prev_lat, prev_lon,
+            df['Latitude'], df['Longitude']
+        )
+        df['distance_m'] = df['distance_m'].fillna(0)
+    
+    # Compute speed_m_s if missing or contains NaN
+    if 'speed_m_s' not in df.columns or df['speed_m_s'].isna().any():
+        Logger.add("  Computing speed_m_s...")
+        df['speed_m_s'] = np.where(
+            df['dt'] > 0,
+            df['distance_m'] / df['dt'],
+            0
+        )
+    
+    # Compute delta_alt (altitude change) if missing
+    if 'delta_alt' not in df.columns or df['delta_alt'].isna().any():
+        Logger.add("  Computing delta_alt (altitude change)...")
+        df['delta_alt'] = df.groupby('Device_id')['Altitude'].diff()
+        df['delta_alt'] = df['delta_alt'].fillna(0)
+    
+    # Compute bearing if missing (though we don't use it as a feature)
+    if 'bearing' not in df.columns or df['bearing'].isna().any():
+        Logger.add("  Computing bearing...")
+        prev_lat = df.groupby('Device_id')['Latitude'].shift(1)
+        prev_lon = df.groupby('Device_id')['Longitude'].shift(1)
+        
+        df['bearing'] = compute_bearing(
+            prev_lat, prev_lon,
+            df['Latitude'], df['Longitude']
+        )
+        df['bearing'] = df['bearing'].fillna(0)
+    
+    # Compute acceleration if missing
+    if 'acceleration' not in df.columns or df['acceleration'].isna().any():
+        Logger.add("  Computing acceleration...")
+        df['speed_change'] = df.groupby('Device_id')['speed_m_s'].diff()
+        df['acceleration'] = np.where(
+            df['dt'] > 0,
+            df['speed_change'] / df['dt'],
+            0
+        )
+        df['acceleration'] = df['acceleration'].fillna(0)
+    
     # === Basic movement features ===
     
     # Vertical speed (m/s)
@@ -377,7 +450,9 @@ def build_features(df: pd.DataFrame,
         feature_columns.append('acceleration_abs')
     
     # Speed change (jerk approximation)
-    df['speed_change'] = df.groupby('Device_id')['speed_m_s'].diff()
+    if 'speed_change' not in df.columns:
+        df['speed_change'] = df.groupby('Device_id')['speed_m_s'].diff()
+    
     df['speed_change_rate'] = np.where(
         df['dt'] > 0,
         df['speed_change'] / df['dt'],
@@ -492,6 +567,24 @@ def build_features(df: pd.DataFrame,
     return df, feature_columns
 
 
+def compute_bearing(lat1, lon1, lat2, lon2):
+    """
+    Calculate bearing between two GPS coordinates.
+    
+    Returns bearing in degrees (0-360).
+    """
+    lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
+    
+    dlon = lon2 - lon1
+    
+    x = np.sin(dlon) * np.cos(lat2)
+    y = np.cos(lat1) * np.sin(lat2) - np.sin(lat1) * np.cos(lat2) * np.cos(dlon)
+    
+    bearing = np.arctan2(x, y)
+    bearing = np.degrees(bearing)
+    bearing = (bearing + 360) % 360
+    
+    return bearing
 # ============================================================================
 # MODEL TRAINING
 # ============================================================================
