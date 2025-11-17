@@ -16,7 +16,7 @@ class app:
         self.m = ""
         self.selected_devices = ["wb_3"]
         self.messages = ["Logger.get_logs()"]
-        self.dev_mode = 1
+        self.dev_mode = 0
         
         
         if "loaded" not in st.session_state:
@@ -37,6 +37,8 @@ class app:
             st.session_state.data_info_placeholder = ""
         if "timer" not in st.session_state:
             st.session_state.timer = ""
+        if "show_polyline" not in st.session_state:
+            st.session_state["show_polyline"] = True
         if "active_devices" not in st.session_state:
             st.session_state.active_devices = ""
         if "multiselect" not in st.session_state:
@@ -305,7 +307,7 @@ class app:
         # Show device statuses
         if self.selected_devices and len([d for d in self.selected_devices if d != "All"]) > 0:
             st.sidebar.markdown("---")
-            st.sidebar.subheader("🔍 Device Status")
+            st.sidebar.subheader("Device Status")
             
             for device in self.selected_devices:
                 if device == "All":
@@ -314,10 +316,10 @@ class app:
                 model_name = db_operations.get_device_model(device)
                 
                 if model_name:
-                    st.sidebar.text(f"✅ {device}")
+                    st.sidebar.text(f"   Name: {device}")
                     st.sidebar.text(f"   Model: {model_name}")
                 else:
-                    st.sidebar.text(f"⚠️ {device}")
+                    st.sidebar.text(f"{device}")
                     st.sidebar.text(f"   No model assigned")
         
         # Auto-refresh option (optional)
@@ -330,6 +332,7 @@ class app:
             st.rerun()
 
     def add_learnmode_options(self):
+        st.sidebar.markdown("---")
         st.session_state["model_name"] = st.sidebar.text_input(
             label="Add new model name", 
             on_change=self.start_data_collection, 
@@ -340,6 +343,7 @@ class app:
             st.sidebar.button("Train", on_click=self.start_training)
     
     def add_model_assiggnment_options(self):
+        st.sidebar.markdown("---")
         st.sidebar.text("Assign models to your devices")
         
         if "All" not in self.selected_devices:
@@ -426,6 +430,9 @@ class app:
             print("device data couldn't be loaded")
 
     def setup(self):
+        st.sidebar.title("Watchbird")
+        st.sidebar.markdown("---")
+        
         self.m = folium.Map(
             location=[st.session_state.location.latitude, st.session_state.location.longitude],  
             zoom_start=st.session_state["zoom"],
