@@ -151,22 +151,6 @@ class app:
         st.session_state.monitoring_stats['anomalies_detected'] += total_anomalies
         st.session_state.monitoring_stats['last_check'] = datetime.now()
         
-        # Show results
-        '''
-        if total_new_points > 0:
-            if total_anomalies > 0:
-                st.session_state.message = [
-                    "warning", 
-                    f"⚠️ Processed {total_new_points} new points. Found {total_anomalies} anomalies in: {', '.join(devices_with_anomalies)}"
-                ]
-            else:
-                st.session_state.message = [
-                    "success", 
-                    f"✅ Processed {total_new_points} new points. No anomalies detected."
-                ]
-        else:
-            st.session_state.message = ["info", "No new data points to process"]
-        '''
     def get_new_data_for_device(self, device: str) -> pd.DataFrame:
         """
         Get only NEW data points for a device that haven't been processed yet.
