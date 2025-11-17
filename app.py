@@ -14,7 +14,7 @@ class app:
         self.geolocator = Nominatim(user_agent="streamlit_map")
         st.set_page_config(layout="wide")
         self.m = ""
-        self.selected_devices = []
+        self.selected_devices = ["wb_3"]
         self.messages = ["Logger.get_logs()"]
         self.dev_mode = 1
         
@@ -39,6 +39,9 @@ class app:
             st.session_state.timer = ""
         if "active_devices" not in st.session_state:
             st.session_state.active_devices = ""
+        if "multiselect" not in st.session_state:
+            st.session_state["multiselect"] = ["wb_3"]
+     
         if "last_processed_ids" not in st.session_state:
             # Track last processed record ID per device to detect new data
             st.session_state.last_processed_ids = {}
