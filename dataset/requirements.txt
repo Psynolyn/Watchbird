@@ -1,0 +1,11 @@
+streamlit
+folium
+streamlit-folium
+geopy
+pandas
+numpy
+supabase
+scikit-learn
+matplotlib
+seaborn
+joblib
