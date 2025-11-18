@@ -16,7 +16,7 @@ class app:
         self.m = ""
         self.selected_devices = ["wb_3"]
         self.messages = ["Logger.get_logs()"]
-        self.dev_mode = 0
+        self.dev_mode = 1
         
         
         if "loaded" not in st.session_state:
@@ -298,7 +298,7 @@ class app:
         
         col1, col2 = st.sidebar.columns(2)
         with col1:
-            st.metric("Total Processed", stats['total_processed'])
+            st.text(stats['total_processed'])
 
         if stats['last_check']:
             last_check_str = stats['last_check'].strftime('%H:%M:%S')
