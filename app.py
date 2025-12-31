@@ -330,6 +330,9 @@ class app:
             import time
             time.sleep(30)
             st.rerun()
+            self.reset_parameters()
+            self.reload_and_monitor()
+            
 
     def add_learnmode_options(self):
         st.sidebar.markdown("---")

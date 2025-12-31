@@ -3,3 +3,7 @@
 .streamlit/secrets.toml
 .__pycache__
 .results 
+__pycache__/db_operations.cpython-314.pyc
+__pycache__/train.cpython-314.pyc
+dataset/__pycache__/__init__.cpython-314.pyc
+dataset/__pycache__/db_csv.cpython-314.pyc
