@@ -22,7 +22,7 @@ class app:
         if "loaded" not in st.session_state:
             st.session_state.loaded = db_operations.load_data() 
         if "location" not in st.session_state:
-            st.session_state.location = self.geolocator.geocode("Nairobi")
+            st.session_state.location = self.geolocator.geocode("DeKUT")
         if "zoom" not in st.session_state:
             st.session_state["zoom"] = 18
         if "model_name" not in st.session_state:

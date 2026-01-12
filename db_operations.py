@@ -22,7 +22,7 @@ def load_data():
     device_table = supabase.table("Devices").select("*").order("Device_id", desc=False).execute().data
     device_name_to_id = {row["Device_name"] : row ["Device_id"] for row in device_table}
     device_id_to_settings = {row["Device_id"]: row for row in device_table}
-    active_devices = [row["Device_name"] for row in device_table if row["Status"] == "Active"]
+    active_devices = [row["Device_name"] for row in device_table if row["Status"].strip() == "Active"]
     device_id_to_model = {row["Device_id"]: row["IF_model"] for row in device_table}
 
     chunk_size = 1000
@@ -94,6 +94,9 @@ def get_no_of_rows(devices:list):
         length += len(get_device_data(device))
     return length
 
+def write_to_data_table(payload: dict):
+    supabase.table("Data").upsert(payload).execute()
+    
 def save_outlier_result(outlier_result: dict):
     supabase.table("Data").upsert(outlier_result, on_conflict="Id").execute()
 
