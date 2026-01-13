@@ -18,7 +18,7 @@ PubSubClient mqtt(espClient);
 
 bool show_debug_msgs = 1;
 
-uint32_t last_blink = 0, last_publish = -15000;
+uint32_t last_blink = 0, last_publish = -15000, last_retry = 0;
 bool led_status = 1;
 int Device_id = 4, Latitude=0, Longitude=0, Altitude=0;
 
@@ -47,37 +47,36 @@ void setup() {
 }
 
 void loop() {
-  if (!mqtt.connected()) {
+  if (!mqtt.connected() && (millis() - last_retry)>= 5000) {
+    last_retry = millis();
     if(show_debug_msgs){Serial.print("Connecting to MQTT...");}
-    while (!mqtt.connected()) {
-      if (mqtt.connect("ESP32WiFiClient")) {
-        if(show_debug_msgs){Serial.println(" connected!");}
-      } else {
-        if(show_debug_msgs){
-          Serial.print(" failed, rc=");
-          Serial.print(mqtt.state());
-          Serial.println(" trying again in 5s");
-        }
-        delay(5000);
+    if (mqtt.connect("ESP32WiFiClient")) {
+      if(show_debug_msgs){Serial.println(" connected!");}
+    } else {
+      if(show_debug_msgs){
+        Serial.print(" failed, rc=");
+        Serial.print(mqtt.state());
+        Serial.println(" trying again in 5s");
       }
+      
     }
   }
   
   
-  if(mqtt.connected() && (millis() - last_blink) > 1000){
+  if(mqtt.connected() && (millis() - last_blink) >= 1000){
     last_blink = millis();
     led_status = !led_status;
     digitalWrite(2, led_status);
   }
 
-  if ((millis() - last_publish) > 15000){
+  if ((millis() - last_publish) >= 15000){
     last_publish = millis();
     time_t now = time(nullptr);
     char time_buf[30];
     struct tm* tm_info = localtime(&now);
     strftime(time_buf, sizeof(time_buf), "%Y-%m-%dT%H:%M:%S+03:00", tm_info);
 
-    StaticJsonDocument<200U> doc;
+    StaticJsonDocument<200> doc;
     doc["Timestamp"] = time_buf;
     doc["Device_id"] = Device_id;
     doc["Latitude"] = Latitude;
